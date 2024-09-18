@@ -4,6 +4,10 @@ import ca.ubc.cs317.dict.model.Database;
 import ca.ubc.cs317.dict.model.Definition;
 import ca.ubc.cs317.dict.model.MatchingStrategy;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.Socket;
 import java.util.*;
 
 /**
@@ -12,7 +16,9 @@ import java.util.*;
 public class DictionaryConnection {
 
     private static final int DEFAULT_PORT = 2628;
-
+    private Socket dictSocket;
+    private BufferedReader dictSocketInput;
+    private PrintWriter dictSocketOutput;
     /** Establishes a new connection with a DICT server using an explicit host and port number, and handles initial
      * welcome messages.
      *
@@ -23,8 +29,20 @@ public class DictionaryConnection {
      */
     public DictionaryConnection(String host, int port) throws DictConnectionException {
         // TODO Replace this with code that creates the requested connection
+        try {
+            this.dictSocket = new Socket(host, port);
+            this.dictSocketInput = new BufferedReader(new InputStreamReader(this.dictSocket.getInputStream()));
+            this.dictSocketOutput = new PrintWriter(dictSocket.getOutputStream(), true);
+            Status status = Status.readStatus(dictSocketInput);
+            System.out.println(status.getStatusCode()); //check status
+            if (status.isNegativeReply()) {
+                System.out.println(status.getDetails());
+                throw new DictConnectionException("Error connecting");
+            }
 
-        throw new DictConnectionException("Not implemented");
+        } catch(Exception e) {
+            throw new DictConnectionException(e.toString());
+        }
     }
 
     /** Establishes a new connection with a DICT server using an explicit host, with the default DICT port number, and
@@ -45,6 +63,17 @@ public class DictionaryConnection {
     public synchronized void close() {
 
         // TODO Add your code here
+        try {
+            this.dictSocketOutput.println("QUIT\r\n");
+        } catch (Exception e) {
+            //ignore exceptions
+        } finally {
+            try {
+                this.dictSocket.close();
+            } catch (Exception e) {
+                //ignore exceptions
+            }
+        }
     }
 
     /** Requests and retrieves all definitions for a specific word.

@@ -19,6 +19,7 @@ public class DictionaryConnection {
     private Socket dictSocket;
     private BufferedReader dictSocketInput;
     private PrintWriter dictSocketOutput;
+    private Map<String, Database> databaseMap;
     /** Establishes a new connection with a DICT server using an explicit host and port number, and handles initial
      * welcome messages.
      *
@@ -28,7 +29,7 @@ public class DictionaryConnection {
      * don't match their expected value.
      */
     public DictionaryConnection(String host, int port) throws DictConnectionException {
-        // TODO Replace this with code that creates the requested connection
+        // TODO Replace this with code that creates the requested connection DONE
         try {
             this.dictSocket = new Socket(host, port);
             this.dictSocketInput = new BufferedReader(new InputStreamReader(this.dictSocket.getInputStream()));
@@ -62,17 +63,14 @@ public class DictionaryConnection {
      */
     public synchronized void close() {
 
-        // TODO Add your code here
+        // TODO Add your code here DONE
+        this.dictSocketOutput.println("QUIT");
         try {
-            this.dictSocketOutput.println("QUIT\r\n");
+            this.dictSocketInput.close();
+            this.dictSocketOutput.close();
+            this.dictSocket.close();
         } catch (Exception e) {
             //ignore exceptions
-        } finally {
-            try {
-                this.dictSocket.close();
-            } catch (Exception e) {
-                //ignore exceptions
-            }
         }
     }
 
@@ -89,8 +87,48 @@ public class DictionaryConnection {
     public synchronized Collection<Definition> getDefinitions(String word, Database database) throws DictConnectionException {
         Collection<Definition> set = new ArrayList<>();
 
-        // TODO Add your code here
+        // TODO Add your code here DONE
 
+        String response = null;
+        this.databaseMap = this.getDatabaseList();
+
+        try {
+            // request information from server
+            this.dictSocketOutput.println("DEFINE" + " " + database.getName() + " " + word);
+
+            // read response
+            Status status = Status.readStatus(this.dictSocketInput);
+            String details = status.getDetails();
+            if (status.getStatusCode() == 552) throw new DictConnectionException("No match found");
+            if (status.getStatusCode() != 150) throw new DictConnectionException(details);
+
+            // Get how many definitions in total
+            int numberOfDefinitions  = Integer.parseInt(DictStringParser.splitAtoms(details)[0]);
+
+            // create definition objects and add to set
+            for (int i = 0; i < numberOfDefinitions; i++) {
+                status = Status.readStatus(this.dictSocketInput);
+                details = status.getDetails();
+
+                if (status.getStatusCode() != 151) throw new DictConnectionException(details);
+
+                String Details[] = DictStringParser.splitAtoms(details);
+                Definition definition = new Definition(Details[0], this.databaseMap.get(Details[1]).getDescription());
+                while (true) {
+                    response = this.dictSocketInput.readLine();
+                    if (response.equals(".")) break;
+                    definition.appendDefinition(response);
+                }
+                set.add(definition);
+            }
+
+            //check completion
+            status  = Status.readStatus(this.dictSocketInput);
+            if (status.getStatusCode() != 250) throw new DictConnectionException(status.getDetails());
+        }
+        catch (Exception e) {
+            throw new DictConnectionException(e);
+        }
         return set;
     }
 
@@ -120,8 +158,30 @@ public class DictionaryConnection {
     public synchronized Map<String, Database> getDatabaseList() throws DictConnectionException {
         Map<String, Database> databaseMap = new HashMap<>();
 
-        // TODO Add your code here
+        // TODO Add your code here DONE
+        try {
+            dictSocketOutput.println("SHOW DB");
+            // read response
+            Status status = Status.readStatus(this.dictSocketInput);
+            String details = status.getDetails();
+            if (status.getStatusCode() == 554) throw new DictConnectionException("No databases present");
 
+            int numberOfDatabases  = Integer.parseInt(DictStringParser.splitAtoms(details)[0]);
+            // create database objects and add to map
+            for (int i = 0; i < numberOfDatabases; i++) {
+
+                String Details[] = DictStringParser.splitAtoms(dictSocketInput.readLine());
+                Database database = new Database(Details[0], Details[1]);
+                databaseMap.put(Details[0], database);
+            }
+            this.dictSocketInput.readLine();
+            status = Status.readStatus(this.dictSocketInput);
+            if (status.getStatusCode() != 250) throw new DictConnectionException("problem 250");
+
+
+        } catch (Exception e) {
+            throw new DictConnectionException(e);
+        }
         return databaseMap;
     }
 

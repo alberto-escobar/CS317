@@ -87,7 +87,7 @@ public class DictionaryConnection {
     public synchronized Collection<Definition> getDefinitions(String word, Database database) throws DictConnectionException {
         Collection<Definition> set = new ArrayList<>();
 
-        // TODO Add your code here DONE
+        // TODO Add your code here
 
         String response = null;
         this.databaseMap = this.getDatabaseList();
@@ -99,7 +99,9 @@ public class DictionaryConnection {
             // read response
             Status status = Status.readStatus(this.dictSocketInput);
             String details = status.getDetails();
-            if (status.getStatusCode() == 552) throw new DictConnectionException("No match found");
+            if (status.getStatusCode() == 552) return set;
+            if (status.getStatusCode() == 550) return set;
+            if (!this.databaseMap.containsKey(database.getName())) return set;
             if (status.getStatusCode() != 150) throw new DictConnectionException(details);
 
             // Get how many definitions in total
@@ -116,7 +118,10 @@ public class DictionaryConnection {
                 Definition definition = new Definition(Details[0], this.databaseMap.get(Details[1]).getDescription());
                 while (true) {
                     response = this.dictSocketInput.readLine();
-                    if (response.equals(".")) break;
+                    if (response.equals(".")) {
+                        System.out.println("pickle ree");
+                        break;
+                    }
                     definition.appendDefinition(response);
                 }
                 set.add(definition);
@@ -145,8 +150,26 @@ public class DictionaryConnection {
     public synchronized Set<String> getMatchList(String word, MatchingStrategy strategy, Database database) throws DictConnectionException {
         Set<String> set = new LinkedHashSet<>();
 
-        // TODO Add your code here
+        // TODO Add your code here DONE
+        try {
+            dictSocketOutput.println("MATCH " + database.getName() + " " + strategy.getName() + " " + word);
+            Status status = Status.readStatus(dictSocketInput);
+            if (status.getStatusCode() == 550) return set;
+            if (status.getStatusCode() == 551) return set;
+            if (status.getStatusCode() == 552) return set;
+            if (status.getStatusCode() != 152) throw new DictConnectionException();
+            String response = dictSocketInput.readLine();
+            while (!response.equals(".")) {
+                String string[] = DictStringParser.splitAtoms(response);
+                set.add(string[1]);
+                response = dictSocketInput.readLine();
+            }
+            status = Status.readStatus(dictSocketInput);
+            if (status.getStatusCode() != 250) throw new DictConnectionException("database does not exist");
 
+        } catch (Exception e) {
+            throw new DictConnectionException(e);
+        }
         return set;
     }
 
@@ -164,7 +187,7 @@ public class DictionaryConnection {
             // read response
             Status status = Status.readStatus(this.dictSocketInput);
             String details = status.getDetails();
-            if (status.getStatusCode() == 554) throw new DictConnectionException("No databases present");
+            if (status.getStatusCode() == 554) return databaseMap;
 
             int numberOfDatabases  = Integer.parseInt(DictStringParser.splitAtoms(details)[0]);
             // create database objects and add to map
@@ -193,8 +216,24 @@ public class DictionaryConnection {
     public synchronized Set<MatchingStrategy> getStrategyList() throws DictConnectionException {
         Set<MatchingStrategy> set = new LinkedHashSet<>();
 
-        // TODO Add your code here
-
+        // TODO Add your code here DONE
+        try {
+            this.dictSocketOutput.println("SHOW STRAT");
+            Status status = Status.readStatus(dictSocketInput);
+            if (status.getStatusCode() == 555) return set;
+            if (status.getStatusCode() != 111) throw new DictConnectionException();
+            String response = dictSocketInput.readLine();
+            while (!response.equals(".")) {
+                String strategy[] = DictStringParser.splitAtoms(response);
+                MatchingStrategy ms = new MatchingStrategy(strategy[0], strategy[1]);
+                set.add(ms);
+                response = dictSocketInput.readLine();
+            }
+            status = Status.readStatus(dictSocketInput);
+            if (status.getStatusCode() != 250) throw new DictConnectionException("database does not exist");
+        } catch (Exception e) {
+            throw new DictConnectionException(e);
+        }
         return set;
     }
 
@@ -206,8 +245,21 @@ public class DictionaryConnection {
     public synchronized String getDatabaseInfo(Database d) throws DictConnectionException {
 	StringBuilder sb = new StringBuilder();
 
-        // TODO Add your code here
-
+        // TODO Add your code here DONE
+        try {
+            this.dictSocketOutput.println("SHOW INFO" + " " + d.getName());
+            Status status = Status.readStatus(dictSocketInput);
+            if (status.getStatusCode() == 550) throw new DictConnectionException("database does not exist");
+            String response = dictSocketInput.readLine();
+            while (!response.equals(".")) {
+                sb.append(response);
+                response = dictSocketInput.readLine();
+            }
+            status = Status.readStatus(dictSocketInput);
+            if (status.getStatusCode() != 250) throw new DictConnectionException("database does not exist");
+        } catch (Exception e) {
+            throw new DictConnectionException(e);
+        }
         return sb.toString();
     }
 }

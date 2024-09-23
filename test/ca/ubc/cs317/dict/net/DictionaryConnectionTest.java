@@ -34,4 +34,14 @@ public class DictionaryConnectionTest {
         Collection<Definition> defs = conn.getDefinitions("parrot", wn);
         assertTrue(defs.size() > 0);
     }
+    @Test
+    public void testGetDefinition1() throws DictConnectionException {
+        DictionaryConnection conn = new DictionaryConnection("dict.org");
+        Map<String, Database> dbl = conn.getDatabaseList();
+        assertTrue(dbl.size() > 0);
+        Database wn = dbl.get("wn");
+        assertNotNull(wn);
+        Collection<Definition> defs = conn.getDefinitions("3821938219", wn);
+        assertTrue(defs.size() == 0);
+    }
 }

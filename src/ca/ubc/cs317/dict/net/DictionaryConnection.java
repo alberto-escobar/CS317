@@ -11,7 +11,7 @@ import java.net.Socket;
 import java.util.*;
 
 /**
- * Created by Jonatan on 2017-09-09.
+ * Created by Jonatan on 2017-09-09. f
  */
 public class DictionaryConnection {
 
@@ -19,7 +19,6 @@ public class DictionaryConnection {
     private Socket dictSocket;
     private BufferedReader dictSocketInput;
     private PrintWriter dictSocketOutput;
-    private Map<String, Database> databaseMap;
     /** Establishes a new connection with a DICT server using an explicit host and port number, and handles initial
      * welcome messages.
      *
@@ -35,9 +34,7 @@ public class DictionaryConnection {
             this.dictSocketInput = new BufferedReader(new InputStreamReader(this.dictSocket.getInputStream()));
             this.dictSocketOutput = new PrintWriter(dictSocket.getOutputStream(), true);
             Status status = Status.readStatus(dictSocketInput);
-            System.out.println(status.getStatusCode()); //check status
             if (status.isNegativeReply()) {
-                System.out.println(status.getDetails());
                 throw new DictConnectionException("Error connecting");
             }
 
@@ -89,50 +86,39 @@ public class DictionaryConnection {
 
         // TODO Add your code here
 
-        String response = null;
-        this.databaseMap = this.getDatabaseList();
-
         try {
-            // request information from server
-            this.dictSocketOutput.println("DEFINE" + " " + database.getName() + " " + word);
+            this.dictSocketOutput.println("DEFINE" + " " + database.getName() + " \"" + word + "\"");
 
-            // read response
             Status status = Status.readStatus(this.dictSocketInput);
-            String details = status.getDetails();
-            if (status.getStatusCode() == 552) return set;
-            if (status.getStatusCode() == 550) return set;
-            if (!this.databaseMap.containsKey(database.getName())) return set;
-            if (status.getStatusCode() != 150) throw new DictConnectionException(details);
 
-            // Get how many definitions in total
+            if (status.getStatusCode() == 550) return set;
+            if (status.getStatusCode() == 552) return set;
+            if (status.getStatusCode() != 150) throw new DictConnectionException("DEFINE returned with " + status.getStatusCode() + status.getDetails());
+
+            String details = status.getDetails();
             int numberOfDefinitions  = Integer.parseInt(DictStringParser.splitAtoms(details)[0]);
 
-            // create definition objects and add to set
             for (int i = 0; i < numberOfDefinitions; i++) {
                 status = Status.readStatus(this.dictSocketInput);
+                if (status.getStatusCode() != 151) throw new DictConnectionException("DEFINE returned with " + status.getStatusCode() + status.getDetails());
                 details = status.getDetails();
-
-                if (status.getStatusCode() != 151) throw new DictConnectionException(details);
-
                 String Details[] = DictStringParser.splitAtoms(details);
-                Definition definition = new Definition(Details[0], this.databaseMap.get(Details[1]).getDescription());
-                while (true) {
-                    response = this.dictSocketInput.readLine();
-                    if (response.equals(".")) {
-                        System.out.println("pickle ree");
-                        break;
-                    }
+                Definition definition = new Definition(Details[0], Details[1]);
+
+                String response = this.dictSocketInput.readLine();
+                while (!response.equals(".")) {
                     definition.appendDefinition(response);
+                    response = this.dictSocketInput.readLine();
                 }
                 set.add(definition);
             }
 
-            //check completion
             status  = Status.readStatus(this.dictSocketInput);
-            if (status.getStatusCode() != 250) throw new DictConnectionException(status.getDetails());
+            if (status.getStatusCode() != 250) throw new DictConnectionException("not 250, go this " + status.getDetails() + status.getDetails());
         }
         catch (Exception e) {
-            throw new DictConnectionException(e);
+            e.printStackTrace();
+            throw new DictConnectionException("Error in getDefinitions: " + e);
         }
         return set;
     }
@@ -152,23 +138,27 @@ public class DictionaryConnection {
 
         // TODO Add your code here DONE
         try {
-            dictSocketOutput.println("MATCH " + database.getName() + " " + strategy.getName() + " " + word);
+            dictSocketOutput.println("MATCH " + database.getName() + " " + strategy.getName() + " \"" + word + "\"");
+
             Status status = Status.readStatus(dictSocketInput);
+
             if (status.getStatusCode() == 550) return set;
             if (status.getStatusCode() == 551) return set;
             if (status.getStatusCode() == 552) return set;
-            if (status.getStatusCode() != 152) throw new DictConnectionException();
+            if (status.getStatusCode() != 152) throw new DictConnectionException("MATCH returned with " + status.getStatusCode() + status.getDetails());
+
             String response = dictSocketInput.readLine();
             while (!response.equals(".")) {
                 String string[] = DictStringParser.splitAtoms(response);
                 set.add(string[1]);
                 response = dictSocketInput.readLine();
             }
-            status = Status.readStatus(dictSocketInput);
-            if (status.getStatusCode() != 250) throw new DictConnectionException("database does not exist");
+
+            status  = Status.readStatus(this.dictSocketInput);
+            if (status.getStatusCode() != 250) throw new DictConnectionException("not 250, go this " + status.getDetails() + status.getDetails());
 
         } catch (Exception e) {
-            throw new DictConnectionException(e);
+            throw new DictConnectionException("error in getMatchList: " + e);
         }
         return set;
     }
@@ -186,24 +176,22 @@ public class DictionaryConnection {
             dictSocketOutput.println("SHOW DB");
             // read response
             Status status = Status.readStatus(this.dictSocketInput);
-            String details = status.getDetails();
             if (status.getStatusCode() == 554) return databaseMap;
+            if (status.getStatusCode() != 110) throw new DictConnectionException("SHOW DB returned with " + status.getStatusCode() + status.getDetails());
 
-            int numberOfDatabases  = Integer.parseInt(DictStringParser.splitAtoms(details)[0]);
-            // create database objects and add to map
-            for (int i = 0; i < numberOfDatabases; i++) {
-
-                String Details[] = DictStringParser.splitAtoms(dictSocketInput.readLine());
+            String response = dictSocketInput.readLine();
+            while (!response.equals(".")) {
+                String Details[] = DictStringParser.splitAtoms(response);
                 Database database = new Database(Details[0], Details[1]);
                 databaseMap.put(Details[0], database);
+                response = dictSocketInput.readLine();
             }
-            this.dictSocketInput.readLine();
-            status = Status.readStatus(this.dictSocketInput);
-            if (status.getStatusCode() != 250) throw new DictConnectionException("problem 250");
 
+            status  = Status.readStatus(this.dictSocketInput);
+            if (status.getStatusCode() != 250) throw new DictConnectionException("not 250, go this " + status.getDetails());
 
         } catch (Exception e) {
-            throw new DictConnectionException(e);
+            throw new DictConnectionException("error in getDatabaseList: " + e);
         }
         return databaseMap;
     }
@@ -221,7 +209,7 @@ public class DictionaryConnection {
             this.dictSocketOutput.println("SHOW STRAT");
             Status status = Status.readStatus(dictSocketInput);
             if (status.getStatusCode() == 555) return set;
-            if (status.getStatusCode() != 111) throw new DictConnectionException();
+            if (status.getStatusCode() != 111) throw new DictConnectionException("SHOW STRAT returned with " + status.getStatusCode() + status.getDetails());
             String response = dictSocketInput.readLine();
             while (!response.equals(".")) {
                 String strategy[] = DictStringParser.splitAtoms(response);
@@ -229,10 +217,11 @@ public class DictionaryConnection {
                 set.add(ms);
                 response = dictSocketInput.readLine();
             }
-            status = Status.readStatus(dictSocketInput);
-            if (status.getStatusCode() != 250) throw new DictConnectionException("database does not exist");
+
+            status  = Status.readStatus(this.dictSocketInput);
+            if (status.getStatusCode() != 250) throw new DictConnectionException("not 250, go this " + status.getDetails());
         } catch (Exception e) {
-            throw new DictConnectionException(e);
+            throw new DictConnectionException("Error in getStrategyList: \n" + e.getCause());
         }
         return set;
     }
@@ -247,6 +236,8 @@ public class DictionaryConnection {
 
         // TODO Add your code here DONE
         try {
+            if (d.getName().equals("*")) return sb.toString();
+            if (d.getName().equals("!")) return sb.toString();
             this.dictSocketOutput.println("SHOW INFO" + " " + d.getName());
             Status status = Status.readStatus(dictSocketInput);
             if (status.getStatusCode() == 550) throw new DictConnectionException("database does not exist");
@@ -255,10 +246,10 @@ public class DictionaryConnection {
                 sb.append(response);
                 response = dictSocketInput.readLine();
             }
-            status = Status.readStatus(dictSocketInput);
-            if (status.getStatusCode() != 250) throw new DictConnectionException("database does not exist");
+            status  = Status.readStatus(this.dictSocketInput);
+            if (status.getStatusCode() != 250) throw new DictConnectionException("not 250, go this " + status.getDetails());
         } catch (Exception e) {
-            throw new DictConnectionException(e);
+            throw new DictConnectionException("Error in getDatabaseInfo: " + e);
         }
         return sb.toString();
     }

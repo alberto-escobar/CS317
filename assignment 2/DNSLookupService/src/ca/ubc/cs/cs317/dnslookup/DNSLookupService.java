@@ -1,8 +1,10 @@
 package ca.ubc.cs.cs317.dnslookup;
 
-import java.io.*;
 import java.net.*;
-import java.util.*;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Random;
+import java.util.Set;
 
 public class DNSLookupService {
 
@@ -141,7 +143,14 @@ public class DNSLookupService {
      */
     public DNSMessage buildQuery(DNSQuestion question) {
         /* TODO: To be implemented by the student */
-        return new DNSMessage((short)23);
+        short transactionID = (short) random.nextInt(0x10000);
+        DNSMessage message = new DNSMessage(transactionID);
+        message.setQR(false);
+        message.setOpcode(0);
+        message.setRD(false);
+        message.setQDCount(0);
+        message.addQuestion(question);
+        return message;
     }
 
     /**
@@ -159,7 +168,39 @@ public class DNSLookupService {
      */
     public Set<ResourceRecord> processResponse(DNSMessage message) throws DNSErrorException {
         /* TODO: To be implemented by the student */
-        return null;
+        if (message.getRcode() != 0) {
+            throw new DNSErrorException("reply contains non-zero Rcode value");
+        }
+        DNSCache cache = DNSCache.getInstance();
+        Set<ResourceRecord> resourceRecords = new HashSet<>();
+        message.getQuestion();
+        int answers = message.getANCount();
+        verbose.printAnswersHeader(answers);
+        for (int i = 0; i < answers; i++) {
+            ResourceRecord rr = message.getRR();
+            verbose.printIndividualResourceRecord(rr, rr.getRecordType().getCode(), rr.getRecordClassCode());
+            resourceRecords.add(rr);
+            cache.addResult((CommonResourceRecord) rr);
+        }
+
+        answers = message.getNSCount();
+        verbose.printNameserversHeader(answers);
+        for (int i = 0; i < answers; i++) {
+            ResourceRecord rr = message.getRR();
+            verbose.printIndividualResourceRecord(rr, rr.getRecordType().getCode(), rr.getRecordClassCode());
+            resourceRecords.add(rr);
+            cache.addResult((CommonResourceRecord) rr);
+        }
+
+        answers = message.getARCount();
+        verbose.printAdditionalInfoHeader(answers);
+        for (int i = 0; i < answers; i++) {
+            ResourceRecord rr = message.getRR();
+            verbose.printIndividualResourceRecord(rr, rr.getRecordType().getCode(), rr.getRecordClassCode());
+            resourceRecords.add(rr);
+            cache.addResult((CommonResourceRecord) rr);
+        }
+        return resourceRecords;
     }
 
     public static class DNSErrorException extends Exception {

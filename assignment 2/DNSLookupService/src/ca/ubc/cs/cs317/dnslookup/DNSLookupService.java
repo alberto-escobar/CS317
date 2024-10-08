@@ -1,10 +1,8 @@
 package ca.ubc.cs.cs317.dnslookup;
 
+import java.io.*;
 import java.net.*;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
 
 public class DNSLookupService {
 
@@ -104,7 +102,28 @@ public class DNSLookupService {
     public Collection<CommonResourceRecord> iterativeQuery(DNSQuestion question)
             throws DNSErrorException {
         Set<CommonResourceRecord> ans = new HashSet<>();
+        Set<CommonResourceRecord> triedServers = new HashSet<>();
         /* TODO: To be implemented by the student */
+        if (!cache.getCachedResults(question).isEmpty() && containsAnswer(cache.getCachedResults(question), question)) {
+            return cache.getCachedResults(question);
+        }
+        while (!containsAnswer(ans, question)) {
+            List<CommonResourceRecord> knownServers = cache.filterByKnownIPAddress(cache.getBestNameservers(question));
+            if (triedServers.containsAll(knownServers)) {
+                return cache.getCachedResults(question);
+            }
+            for (CommonResourceRecord server : knownServers) {
+                Set<ResourceRecord> queryResults = individualQueryProcess(question, server.getInetResult());
+                triedServers.add(server);
+                if (queryResults != null) {
+                    ans.add(server);
+                    if (containsAnswer(ans, question)) {
+                        break;
+                    }
+                }
+            }
+
+        }
         return ans;
     }
 
@@ -128,7 +147,58 @@ public class DNSLookupService {
     public Set<ResourceRecord> individualQueryProcess(DNSQuestion question, InetAddress server)
             throws DNSErrorException {
         /* TODO: To be implemented by the student */
+        DNSMessage queryMessage = this.buildQuery(question);
+        byte[] queryMessageBytes = queryMessage.getUsed();
+        DatagramPacket queryPacket = new DatagramPacket(queryMessageBytes, queryMessageBytes.length, server, DEFAULT_DNS_PORT);
+        byte[] responseMessageBytes = new byte[MAX_DNS_MESSAGE_LENGTH];
+        DatagramPacket responsePacket = new DatagramPacket(responseMessageBytes, MAX_DNS_MESSAGE_LENGTH);
+        try {
+            socket.setSoTimeout(SO_TIMEOUT);
+        } catch (SocketException e) {
+            throw new RuntimeException(e);
+        }
+        for (int i = 0; i < MAX_QUERY_ATTEMPTS ; i++) {
+            try {
+                verbose.printQueryToSend("UDP", question, server, queryMessage.getID());
+                socket.send(queryPacket);
+                socket.receive(responsePacket);
+
+                DNSMessage responseMessage = new DNSMessage(responsePacket.getData(), responsePacket.getLength());
+
+                if (responseMessage.getID() == queryMessage.getID() && responseMessage.getQR()) {
+                    if(responseMessage.getTC()){
+                        //do nothing for now
+                        //return processResponse(TCPFallback(queryMessage, server));
+                    }
+                    verbose.printResponseHeaderInfo(responseMessage.getID(), responseMessage.getAA(), responseMessage.getTC(), responseMessage.getRcode());
+                    return processResponse(responseMessage);
+                }
+
+            } catch (SocketTimeoutException e) {
+                // if timeout, try again.
+                continue;
+            } catch (Exception e) {
+                throw new DNSErrorException((e.toString()));
+            }
+        }
         return null;
+    }
+
+    private DNSMessage TCPFallback(DNSMessage questionMessage, InetAddress server)
+            throws DNSErrorException {
+        try {
+            verbose.printQueryToSend("TCP", questionMessage.getQuestion(), server, questionMessage.getID());
+            Socket tcpSocket = new Socket(server.getHostAddress(), DEFAULT_DNS_PORT);
+            DataOutputStream in = new DataOutputStream(tcpSocket.getOutputStream());
+            DataInputStream out = new DataInputStream(tcpSocket.getInputStream());
+            in.write(questionMessage.getUsed());
+            byte[] output = new byte[MAX_EDNS_MESSAGE_LENGTH];
+            out.readFully(output);
+            return new DNSMessage(output, output.length);
+        } catch (Exception e) {
+            throw new DNSErrorException(e.toString());
+        }
+
     }
 
     /**

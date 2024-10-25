@@ -1,0 +1,11 @@
+4: Command is USER john.doe@example.com
+Executing user
+Received USER: john.doe@example.com
+4: Command is PASS password123
+Executing pass
+Received PASS
+4: Command is LIST
+4: Command is RETR 1
+4: Command is DELE 1
+4: Command is QUIT
+Executing quit

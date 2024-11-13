@@ -20,4 +20,7 @@ Score: 100%
 
 ## Assignment 4
 
-Score: WIP
+Score:94%
+Failing tests:
+
+- STCP: Windowing- test_windowing

@@ -27,3 +27,5 @@ Failing tests:
 - STCP: Windowing- test_windowing
 
 ## Assignment 5
+
+Score: 100%

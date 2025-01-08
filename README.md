@@ -20,7 +20,7 @@ Score: 100%
 
 ## Assignment 4 - STCP
 
-Score:94%
+Score: 94%
 
 Failing tests:
 

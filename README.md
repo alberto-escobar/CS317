@@ -1,4 +1,4 @@
-# CPSC 317 2024W1
+# CS 317 - Computer Networking
 
 ## Assignment 1 - Dictionary
 
@@ -26,6 +26,6 @@ Failing tests:
 
 - STCP: Windowing- test_windowing
 
-## Assignment 5
+## Assignment 5 - Router
 
 Score: 100%
